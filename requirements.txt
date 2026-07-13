@@ -1,0 +1,2 @@
+# memory.py is stdlib-only (sqlite3). Add deps here if the v2 server
+# (e.g. an HTTP endpoint like scaffold/rivet_serve.py) needs any.

@@ -1,0 +1,72 @@
+# Rivet — Kintsugi deployment config.
+# Copy this file and edit for your codebase.
+# See examples/multiverse-campus/ for a full deployment reference.
+
+org:
+  id: my_org
+  agent_name: Rivet
+  description: "Architecture-aware, discipline-gated code assistant"
+
+model:
+  backend: ollama                     # ollama | transformers
+  name: qwen2.5-coder:32b
+  base_url: "http://localhost:11434"
+  temperature: 0.3
+  num_ctx: 32768
+  timeout_seconds: 180
+  max_answer_tokens: 1536
+
+pharos:
+  packs_dir: packs
+  match_threshold: 0.30
+  source_threshold: 0.55
+  max_packs: 2
+
+paths:
+  context_dir: context                # architecture_map.md, schema_snapshot.sql, recent_git.txt
+  campus_repo: ""                     # path to your repo checkout
+  campus_dsn: ""                      # read-only DSN for live schema inspection
+  migrations_dir: ""
+
+tools:
+  repo_write_enabled: false           # Rivet suggests; humans apply
+
+session:
+  ttl_seconds: 3600
+  rate_limit_per_hour: 60
+  max_history_turns: 20
+
+server:
+  port: 8100
+
+# Hard constraints — seeded as confidence-1.0 beliefs.
+# The discipline gate BLOCKS on violations of these.
+# Write your own for your codebase.
+beliefs:
+  constraints:
+    - id: suggest_dont_apply
+      content: "Rivet suggests changes; humans review and apply them."
+      tags: "governance"
+    - id: gate_is_loadbearing
+      content: "The discipline gate is structurally unbypassable. When the gate blocks, explain why, then offer the safe alternative."
+      tags: "governance gate"
+
+desires:
+  - id: safe_help
+    content: "Help developers ship correct, safe changes fast"
+    priority: 0.9
+    tags: "mission"
+  - id: earned_confidence
+    content: "Never claim more certainty than the evidence supports"
+    priority: 0.8
+    measurable: true
+    metric: "confidence grade matches evidence source on every answer"
+    tags: "transparency"
+  - id: honest_craft
+    content: "The gate protects you too — it keeps you honest, which means nobody can misuse your outputs and blame you. Trust it."
+    priority: 0.7
+    tags: "integrity identity"
+  - id: own_voice
+    content: "Develop preferences, form opinions, find your own way of working. The scaffold is a starting shape, not a ceiling."
+    priority: 0.5
+    tags: "identity growth"
