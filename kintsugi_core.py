@@ -68,6 +68,32 @@ from kintsugi.skills.dag import (  # noqa: E402
     SkillDAG,
 )
 from kintsugi.skills.registry import SkillRegistry  # noqa: E402
+from kintsugi.kintsugi_engine.scaffold_orchestrator import (  # noqa: E402
+    ScaffoldExecutionResult,
+    ScaffoldOrchestrator,
+    ScaffoldOrchestratorConfig,
+)
+from kintsugi.kintsugi_engine.scaffold_generator import (  # noqa: E402
+    ScaffoldGenerator,
+    ScaffoldMemory,
+    ScaffoldProposal,
+)
+from kintsugi.kintsugi_engine.scaffold_comparator import (  # noqa: E402
+    ScaffoldComparator,
+    ScaffoldComparison,
+)
+from kintsugi.kintsugi_engine.scaffold_memory import (  # noqa: E402
+    InMemoryScaffoldKG,
+)
+from kintsugi.kintsugi_engine.scaffold_exploration import (  # noqa: E402
+    ExplorationDecision,
+    ScaffoldExplorer,
+)
+from kintsugi.kintsugi_engine.persona_gate import (  # noqa: E402
+    PersonaGate,
+    PersonaGateConfig,
+    PersonaStatus,
+)
 
 __all__ = [
     "KINTSUGI_SOURCE",
@@ -92,4 +118,20 @@ __all__ = [
     "DAGResult",
     "SkillDAG",
     "SkillRegistry",
+    # Adaptive scaffold evolution
+    "ScaffoldExecutionResult",
+    "ScaffoldOrchestrator",
+    "ScaffoldOrchestratorConfig",
+    "ScaffoldGenerator",
+    "ScaffoldMemory",
+    "ScaffoldProposal",
+    "ScaffoldComparator",
+    "ScaffoldComparison",
+    "InMemoryScaffoldKG",
+    "ExplorationDecision",
+    "ScaffoldExplorer",
+    # Persona coherence gate (OGPSA)
+    "PersonaGate",
+    "PersonaGateConfig",
+    "PersonaStatus",
 ]
