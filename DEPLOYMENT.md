@@ -11,8 +11,8 @@
 ## Step 1: Install
 
 ```bash
-git clone https://github.com/HumboldtJoker/project-agent-army.git
-cd project-agent-army/multiverse-code-assistant/v2
+git clone https://github.com/Liberation-Labs-THCoalition/Project-Rivet.git
+cd Project-Rivet
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -24,14 +24,14 @@ This pulls the model (~19GB, one-time), creates the Rivet configuration, and ini
 Edit `kintsugi_config.yaml`:
 
 ```yaml
-repo:
-  path: /path/to/your/multiversecampus
+paths:
+  campus_repo: /path/to/your/multiversecampus
 ```
 
 Then build the context:
 
 ```bash
-python pharos/build_campus_pack.py --repo /path/to/your/multiversecampus
+python pharos/build_campus_pack.py --context-dir context
 ```
 
 This generates the architecture snapshot and loads it into Rivet's context.
@@ -114,7 +114,7 @@ services:
 When the campus codebase changes significantly (new tables, new routes, major refactor):
 
 ```bash
-python pharos/build_campus_pack.py --repo /path/to/multiversecampus
+python pharos/build_campus_pack.py --context-dir context
 ```
 
 This rebuilds the architecture context. Rivet picks it up on next session start.
@@ -151,4 +151,4 @@ This means the CLAUDE.md system prompt isn't loaded correctly. Verify:
 ```bash
 ollama show rivet --system | grep "Never suggest a destructive migration"
 ```
-If not found, rebuild: `ollama create rivet -f config/Modelfile_claude`
+If not found, rebuild: `ollama create rivet -f Modelfile`

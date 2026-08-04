@@ -1,15 +1,21 @@
 """Model access for Rivet.
 
-Two backends behind one interface:
+Three backends behind one interface:
 
-  OllamaClient       — HTTP to an Ollama server. Knowledge packs are
-                       injected as a system-context block (Ollama's API
-                       exposes no KV-cache handle, so this is the honest
-                       limit of that transport).
-  TransformersClient — local HF transformers. Knowledge packs are
-                       injected as precomputed KV cache blocks via
-                       pharos.kv_injector — true zero-prompt-token
-                       injection, the real Pharos pipeline.
+  OllamaClient        — HTTP to an Ollama server via /api/generate.
+                        Knowledge injected as system-context block.
+  TransformersClient  — local HF transformers. Knowledge injected as
+                        precomputed KV cache blocks via pharos.kv_injector
+                        — true zero-prompt-token injection.
+  OpenAIClientBackend — HTTP to any /v1/chat/completions endpoint:
+                        vLLM, Ollama /v1, llama-server, LM Studio,
+                        OpenRouter, Cerebras, Groq, or any OpenAI-
+                        compatible routing proxy. Knowledge injected as
+                        system-context (same honest limit as Ollama).
+
+Note: rivet.py *serves* /v1/chat/completions inbound (so Continue.dev
+and Cursor can talk TO Rivet). OpenAIClientBackend is outbound — Rivet
+talking to an upstream model server. Two directions, one protocol.
 
 Which backend runs is a config decision (`model.backend`), not a code
 change. Chips only ever see `ModelClient.generate()`.
@@ -31,7 +37,7 @@ class ModelReply:
 
 
 class ModelClient:
-    """Interface. Use OllamaClient or TransformersClient."""
+    """Interface. Use OllamaClient, OpenAIClientBackend, or TransformersClient."""
 
     def generate(self, prompt: str, system: str = "", knowledge: str = "",
                  max_tokens: int = 1024) -> ModelReply:
@@ -90,6 +96,79 @@ class OllamaClient(ModelClient):
             )
 
 
+class OpenAIClientBackend(ModelClient):
+    """Outbound client for any OpenAI-compatible /v1/chat/completions endpoint.
+
+    Supports hosted APIs (OpenRouter, Together, Cerebras, Groq) and local
+    servers (vLLM, Ollama /v1, llama-server, LM Studio). Knowledge is
+    injected as system-context — same approach as OllamaClient.
+    """
+
+    def __init__(self, base_url: str = "http://localhost:8000/v1",
+                 model: str = "", api_key: str = "",
+                 temperature: float = 0.3, max_ctx: int = 32768,
+                 timeout: int = 180):
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.api_key = api_key
+        self.temperature = temperature
+        self.max_ctx = max_ctx
+        self.timeout = timeout
+
+    def generate(self, prompt: str, system: str = "", knowledge: str = "",
+                 max_tokens: int = 1024) -> ModelReply:
+        full_system = system
+        injected = "none"
+        if knowledge:
+            full_system = (
+                f"{system}\n\n# INJECTED KNOWLEDGE (Pharos)\n"
+                f"You have access to the following knowledge:\n{knowledge}"
+            ).strip()
+            injected = "system_prompt"
+
+        messages = []
+        if full_system:
+            messages.append({"role": "system", "content": full_system})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": self.temperature,
+            "stream": False,
+        }
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        req = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(payload).encode(),
+            headers=headers,
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                data = json.loads(resp.read())
+
+            choices = data.get("choices", [])
+            text = ""
+            if choices:
+                text = choices[0].get("message", {}).get("content", "") or ""
+
+            return ModelReply(
+                text=text, ok=True,
+                backend=f"openai_client:{self.model}",
+                knowledge_injected=injected,
+            )
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            return ModelReply(
+                text="", ok=False, backend=f"openai_client:{self.model}",
+                error=f"OpenAI-compatible endpoint unreachable at {self.base_url}: {exc}",
+            )
+
+
 class TransformersClient(ModelClient):
     """Local transformers backend with real KV-cache pack injection.
 
@@ -134,13 +213,25 @@ class TransformersClient(ModelClient):
 
 
 def build_client(cfg: dict) -> ModelClient:
-    """Construct the configured backend from the `model:` config section."""
+    """Construct the configured backend from the `model:` config section.
+
+    backend values: "ollama" (default), "transformers", "openai_client"
+    """
     backend = cfg.get("backend", "ollama")
     if backend == "transformers":
         return TransformersClient(
             model_path=cfg.get("model_path", cfg.get("name", "")),
             device=cfg.get("device", "auto"),
             pack_cache_dir=cfg.get("pack_cache_dir", ""),
+        )
+    if backend == "openai_client":
+        return OpenAIClientBackend(
+            base_url=cfg.get("base_url", "http://localhost:8000/v1"),
+            model=cfg.get("name", ""),
+            api_key=cfg.get("api_key", ""),
+            temperature=cfg.get("temperature", 0.3),
+            max_ctx=cfg.get("max_ctx", 32768),
+            timeout=cfg.get("timeout_seconds", 180),
         )
     return OllamaClient(
         base_url=cfg.get("base_url", "http://localhost:11434"),

@@ -8,13 +8,14 @@ org:
   description: "Architecture-aware, discipline-gated code assistant"
 
 model:
-  backend: ollama                     # ollama | transformers
+  backend: ollama                     # ollama | transformers | openai_client
   name: qwen2.5-coder:32b
   base_url: "http://localhost:11434"
   temperature: 0.3
   num_ctx: 32768
   timeout_seconds: 180
   max_answer_tokens: 1536
+  # api_key: ""                       # for openai_client with hosted endpoints
 
 pharos:
   packs_dir: packs

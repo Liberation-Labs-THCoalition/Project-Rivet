@@ -69,7 +69,7 @@ Start Rivet directly:
   ollama run $MODEL_NAME
 
 Or run it through the discipline-gated HTTP endpoint:
-  python3 "$SCRIPT_DIR/../scaffold/rivet_serve.py" --model $MODEL_NAME
+  python3 "$SCRIPT_DIR/rivet.py"
 
 In Python, load a user's memory before a session:
   from engine.memory import MemoryStore

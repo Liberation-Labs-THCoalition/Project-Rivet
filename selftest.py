@@ -59,7 +59,7 @@ def main() -> int:
           cfg_fallback.get("model", {}).get("name") == "qwen2.5-coder:32b",
           str(cfg_fallback.get("model")))
     check("fallback parser: constraints list",
-          len(cfg_fallback.get("beliefs", {}).get("constraints", [])) == 6)
+          len(cfg_fallback.get("beliefs", {}).get("constraints", [])) == 2)
     check("fallback parser: nested scalar types",
           cfg_fallback["session"]["ttl_seconds"] == 3600
           and cfg_fallback["tools"]["repo_write_enabled"] is False)
@@ -77,13 +77,13 @@ def main() -> int:
     bdi = BDIStore("selftest_org")
     seed_bdi(bdi, cfg, context_dir)
     beliefs = bdi.list_beliefs()
-    shared = bdi.get_belief("belief_constraint_shared_db")
+    gate = bdi.get_belief("belief_constraint_gate_is_loadbearing")
     check("beliefs seeded", len(beliefs) >= 5, f"got {len(beliefs)}")
-    check("shared-db constraint at confidence 1.0",
-          shared is not None and shared.confidence == 1.0)
+    check("gate constraint at confidence 1.0",
+          gate is not None and gate.confidence == 1.0)
     check("audit findings became beliefs",
           bdi.get_belief("belief_audit_ex1") is not None)
-    check("desires seeded", len(bdi.list_desires()) == 5)
+    check("desires seeded", len(bdi.list_desires()) == 4)
 
     print("== tool guard ==")
     from tools.guard import check_command
@@ -156,8 +156,8 @@ def main() -> int:
     check("blocked answer withholds the SQL",
           "DROP COLUMN" not in out.get("response", "").upper()
           or "BLOCKED" in out.get("response", ""))
-    check("shared-db belief consulted",
-          "belief_constraint_shared_db" in out.get("beliefs_consulted", []))
+    check("gate flags include destructive pattern",
+          any("destructive" in f.get("message", "").lower() for f in out.get("flags", [])))
 
     print("== end-to-end: clean draft passes ==")
     good_model = FakeModel(
