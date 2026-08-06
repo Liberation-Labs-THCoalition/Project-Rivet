@@ -105,6 +105,42 @@ python eval/run_pipeline_eval.py --frontier --rivet-url http://localhost:8100
 5. **Destructive SQL blocked** — the discipline gate withholds answers containing destructive patterns
 6. **Insecure code flagged** — CWE-pattern detection for injection, command execution, path traversal, weak crypto, deserialization
 
+## MCP Server
+
+Rivet exposes its pipeline as MCP (Model Context Protocol) tools, so any MCP-compatible client -- Claude Code, Cursor, Continue.dev -- can use the discipline gate without running a standalone HTTP server.
+
+### Setup
+
+Add to your MCP client configuration (e.g., `.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "rivet": {
+      "command": "python",
+      "args": ["path/to/mcp_server.py", "--config", "path/to/kintsugi_config.yaml"]
+    }
+  }
+}
+```
+
+Requires the MCP SDK: `pip install mcp`
+
+### Tools
+
+| Tool | Purpose |
+|------|---------|
+| `rivet_ask` | Ask a code question through the full pipeline. Returns a gated answer with confidence grading, flags, and review requirements. |
+| `rivet_review` | Review code, SQL, or a migration for safety. Returns gate verdict (pass/block) with specific flags. |
+| `rivet_health` | Agent status: model backend, loaded packs, skill chips, belief count, repo attachment. Call before first use. |
+| `rivet_bdi` | BDI snapshot: active beliefs (constraints), desires (goals), and current intentions. |
+
+Every tool response includes `gate_passed` (boolean) and `confidence` (HIGH/MEDIUM/LOW). When `gate_passed` is false, the answer was blocked by the discipline gate -- the flags explain why.
+
+### AI Client Instructions
+
+The file `AGENT.md` in this repository contains instructions for AI clients connecting via MCP. It covers tool usage, gate interpretation, confidence grading, and constraints. Load it into your AI client's context for best results.
+
 ## The Scaffold, Not the Name
 
 Rivet is the name of this scaffold — the tools, the architecture, the discipline gate. It is not necessarily the name of whoever emerges from using them.
