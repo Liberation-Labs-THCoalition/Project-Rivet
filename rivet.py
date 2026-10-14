@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import os
 import asyncio
 import json
 import sys
@@ -308,6 +309,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Rivet code assistant (Kintsugi v2)")
     ap.add_argument("--config", default=str(V2_ROOT / "kintsugi_config.yaml"))
     ap.add_argument("--port", type=int, default=0)
+    ap.add_argument("--host", default="",
+                    help="address to listen on (default: $RIVET_HOST, then server.host in the config, then 127.0.0.1). "
+                         "Rivet reads your repository: expose it beyond this machine only on purpose.")
     ap.add_argument("--ask", help="one-shot question, print JSON and exit")
     ap.add_argument("--user", default="cli")
     ap.add_argument("--show-bdi", action="store_true")
@@ -325,8 +329,13 @@ def main() -> None:
     port = args.port or int(
         (agent.config.get("server") or {}).get("port", 8100))
     health = agent.health()
-    server = HTTPServer(("0.0.0.0", port), make_handler(agent))
-    print(f"Rivet v2 listening on :{port}", flush=True)
+    host = (args.host or os.environ.get("RIVET_HOST")
+            or (agent.config.get("server") or {}).get("host") or "127.0.0.1")
+    server = HTTPServer((host, port), make_handler(agent))
+    print(f"Rivet v2 listening on {host}:{port}", flush=True)
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        print(f"  note: listening beyond this machine ({host}); anyone who can reach it can ask about your repo",
+              flush=True)
     print(f"  kintsugi: {health['kintsugi_source']}", flush=True)
     print(f"  model:    {health['model_backend']}:{health['model']}", flush=True)
     print(f"  skills:   {', '.join(health['skills'])}", flush=True)

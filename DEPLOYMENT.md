@@ -93,15 +93,18 @@ curl -X POST http://localhost:8100/ask \
 docker compose up -d
 ```
 
-This starts Ollama + Rivet in containers. The model is stored in a Docker volume (persists across restarts). Mount your repo as a volume:
+This starts Ollama + Rivet in containers. Rivet listens on 127.0.0.1 by default, because it reads your repository;
+inside a container it has to listen on 0.0.0.0 for the port mapping to work, so the mapping below publishes the port on
+the host's loopback only. Widen either one only on purpose. The model is stored in a Docker volume (persists across restarts). Mount your repo as a volume:
 
 ```yaml
 # docker-compose.yml
 services:
   rivet:
     build: .
+    command: ["python", "rivet.py", "--host", "0.0.0.0"]   # inside the container only
     ports:
-      - "8100:8100"
+      - "127.0.0.1:8100:8100"                            # published on this machine only
     volumes:
       - /path/to/multiversecampus:/repo:ro
       - rivet-data:/app/data

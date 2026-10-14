@@ -39,6 +39,7 @@ session:
 
 server:
   port: 8100
+  host: 127.0.0.1   # Rivet reads your repository: listen beyond this machine only on purpose
 
 # Hard constraints — seeded as confidence-1.0 beliefs.
 # The discipline gate BLOCKS on violations of these.
