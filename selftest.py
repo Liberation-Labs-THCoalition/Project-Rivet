@@ -116,20 +116,29 @@ def main() -> int:
           classify_intent("What does the campus use for state?") == "question")
 
     print("== pharos routing (keyword fallback) ==")
+    # The pack is built from a fixture in the repo, not from ../context: that directory holds a deployment's own
+    # context, outside the repository, so the check used to pass or fail by machine (Vera's build rec, 2026-10-14).
+    fixture_context = V2_ROOT / "selftest_fixtures" / "context"
     with tempfile.TemporaryDirectory() as tmp:
         import subprocess
         result = subprocess.run(
             [sys.executable, str(V2_ROOT / "pharos" / "build_campus_pack.py"),
-             "--context-dir", str(context_dir), "--out", tmp],
+             "--context-dir", str(fixture_context), "--out", tmp],
             capture_output=True, text=True,
         )
         check("campus pack builds", result.returncode == 0, result.stderr[:300])
         from pharos.pack_loader import PackLibrary, PharosRouter
         library = PackLibrary(tmp)
+        triples = library.packs[0].triples if len(library.packs) == 1 else []
+        facts = {(t.get("subject"), t.get("predicate"), t.get("object")) if isinstance(t, dict)
+                 else tuple(t[:3]) for t in triples}
         check("campus pack loads",
-              len(library.packs) == 1
-              and len(library.packs[0].triples) >= 40,
-              f"packs={[p.name for p in library.packs]}")
+              len(library.packs) == 1 and len(triples) >= 28,
+              f"packs={[p.name for p in library.packs]} triples={len(triples)}")
+        check("campus pack reads the architecture map's tables",
+              ("campus_database", "implemented_with", "PostgreSQL") in facts
+              and ("campus", "integrates", "Payments (tuition)") in facts,
+              f"{len(triples)} triples")
         router = PharosRouter(library)
         # force keyword path even if sentence-transformers is installed —
         # the fallback must work on a bare box
