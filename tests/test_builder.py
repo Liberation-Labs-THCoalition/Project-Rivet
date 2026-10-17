@@ -149,6 +149,27 @@ def test_a_dead_model_ends_the_phase_and_says_why(repo):
     assert not res.finished and "ConnectionError" in res.error
 
 
+def test_one_timeout_is_retried_with_a_nudge(repo):
+    m = Script([TimeoutError("timed out"), FIX, {"content": DONE_WORD}])
+    res = run_phase(ws(repo), m, "builder", "guide", "fix add", max_turns=5)
+    assert res.finished and "smaller steps" in m.seen[1]["content"]
+
+
+def test_a_second_timeout_ends_the_phase(repo):
+    res = run_phase(ws(repo), Script([TimeoutError("a"), TimeoutError("b")]), "builder", "guide", "t", max_turns=5)
+    assert not res.finished and "TimeoutError" in res.error
+
+
+def test_old_tool_output_is_elided_to_fit_and_the_task_is_kept():
+    from builder.loop import ELIDED, _fit
+    msgs = [{"role": "system", "content": "S" * 1000}, {"role": "user", "content": "TASK"},
+            {"role": "tool", "content": "a" * 1000}, {"role": "assistant", "content": "thinking"},
+            {"role": "tool", "content": "b" * 1000}]
+    assert _fit(msgs, limit=2200) == 1
+    assert msgs[2]["content"] == ELIDED and msgs[4]["content"] == "b" * 1000
+    assert msgs[0]["content"] == "S" * 1000 and msgs[1]["content"] == "TASK"
+
+
 def test_unknown_tools_and_bad_arguments_are_answered_not_raised(repo):
     m = Script([call("shell", cmd="ls"), call("read_file", nope=1), {"content": DONE_WORD}])
     res = run_phase(ws(repo), m, "builder", "guide", "t", max_turns=5)

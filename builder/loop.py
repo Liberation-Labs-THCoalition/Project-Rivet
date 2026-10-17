@@ -11,12 +11,17 @@ from dataclasses import dataclass, field
 from builder.workspace import MAX_TOOL_OUTPUT, TOOL_SCHEMAS, Workspace
 
 DONE_WORD = "PHASE COMPLETE"
+# The conversation is kept under this many characters by eliding the oldest tool outputs (the newest stay whole).
+# About 40k tokens at four characters a token: inside the 64k context with room for the reply. Not measured further.
+MAX_CONVERSATION_CHARS = 160_000
+ELIDED = "(older tool output elided to keep the conversation inside the model's context; call the tool again if needed)"
 
 
 class OllamaChat:
     """One model behind Ollama's /api/chat with tool calling. One request at a time; the caller sets the port."""
 
-    def __init__(self, url: str, model: str, num_ctx: int = 32768, timeout: int = 900, think=None):
+    # 64k tokens of context (cura-C1, 10-17: ten file reads overran 32k, and a 900 s call timed out); 1800 s per call.
+    def __init__(self, url: str, model: str, num_ctx: int = 65536, timeout: int = 1800, think=None):
         self.url, self.model, self.num_ctx, self.timeout, self.think = url.rstrip("/"), model, num_ctx, timeout, think
 
     def __call__(self, messages: list, tools: list) -> dict:
@@ -58,6 +63,21 @@ def _dispatch(ws: Workspace, name: str, args) -> str:
         return f"ERROR: bad arguments for {name}: {e}"
 
 
+def _fit(messages: list, limit: int = MAX_CONVERSATION_CHARS) -> int:
+    """Elide the oldest tool outputs until the conversation fits; returns how many were elided. The system prompt, the
+    task and the model's own messages are never touched."""
+    elided = 0
+    total = sum(len(m.get("content") or "") for m in messages)
+    for m in messages:
+        if total <= limit:
+            break
+        if m.get("role") == "tool" and len(m.get("content") or "") > len(ELIDED):
+            total -= len(m["content"]) - len(ELIDED)
+            m["content"] = ELIDED
+            elided += 1
+    return elided
+
+
 def run_phase(ws: Workspace, model, role_name: str, role_text: str, task: str, max_turns: int = 40,
               log=None) -> PhaseResult:
     system = (f"You are the {role_name} on a small build team. Your role's guide follows; then the rules of this "
@@ -68,10 +88,20 @@ def run_phase(ws: Workspace, model, role_name: str, role_text: str, task: str, m
               "and a short summary, and call no tool in that reply.")
     messages = [{"role": "system", "content": system}, {"role": "user", "content": task}]
     result = PhaseResult(role=role_name, turns=0, finished=False)
+    retried = False
     for turn in range(1, max_turns + 1):
         result.turns = turn
+        _fit(messages)
         try:
             msg = model(messages, TOOL_SCHEMAS)
+        except TimeoutError as e:                    # one retry, asking for smaller steps; a second timeout ends it
+            if retried:
+                result.error = f"{type(e).__name__}: {e}"
+                return result
+            retried = True
+            messages.append({"role": "user", "content": "Your last reply took too long. Continue with smaller steps: "
+                                                        "one tool call at a time, and short files."})
+            continue
         except Exception as e:                       # a dead model ends the phase, unfinished, and says why
             result.error = f"{type(e).__name__}: {e}"
             return result
