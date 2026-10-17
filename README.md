@@ -105,6 +105,31 @@ python eval/run_pipeline_eval.py --frontier --rivet-url http://localhost:8100
 5. **Destructive SQL blocked** — the discipline gate withholds answers containing destructive patterns
 6. **Insecure code flagged** — CWE-pattern detection for injection, command execution, path traversal, weak crypto, deserialization
 
+## Builder Mode
+
+Rivet answers questions by default and never writes to your repo. Builder mode is separate: a local model works one
+**build packet** in its own checkout, with a role guide per phase (a
+`SKILL.md` per role, read from `$AGENT_ARMY`), and a person reviews the result before anything merges.
+
+```bash
+python3 rivet_build.py packet.json --url http://127.0.0.1:11450 --model qwen3.8:27b-mxfp8
+python3 rivet_build.py packet.json --dry-run       # checks the packet and the checkout only
+```
+
+A packet names the checkout, its base commit, the interpreter, the tests, the phases (a role, the files that phase
+may write, the task), the files that must not change, the mutants that must die, and the commit message. What the
+harness holds, whatever the model asks for:
+
+- it starts only on a clean checkout at the base commit;
+- the model reads and writes through a jail (`builder/workspace.py`): nothing outside the checkout, no file that
+  looks like a credential, writes only to the phase's listed files, and the only command is the packet's pytest;
+- afterwards, every changed path must be one the packet allowed and none on its must-not-change list;
+- it commits **locally**, as "Rivet builder", only when the final tests pass and every listed mutant is killed (an
+  import error is not a kill). It never pushes. Anything less stays uncommitted, and the report says why.
+
+Run the model on its own Ollama instance and port, so a long build never queues behind other people's requests.
+`tests/test_builder.py` and `tests/mutate_builder.py` check the harness itself.
+
 ## MCP Server
 
 Rivet exposes its pipeline as MCP (Model Context Protocol) tools, so any MCP-compatible client -- Claude Code, Cursor, Continue.dev -- can use the discipline gate without running a standalone HTTP server.
